@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 	"github.com/redis/go-redis/v9"
-	"go_distributed_primitives/distributedlock"
+	"go_distributed_primitives/lock"
 )
 
 var (
@@ -36,7 +36,7 @@ func RunSimulationWithDistributedLock(client *redis.Client, buyerCount int) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			lock := distributedlock.NewRedisLock(
+			lock := lock.NewRedisLock(
 				client,
 				lockKey,
 				fmt.Sprintf("goroutine-%d", id),
