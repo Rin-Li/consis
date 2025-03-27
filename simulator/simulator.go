@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
 	"github.com/redis/go-redis/v9"
-	"consis/distributedlock"
+	"go_distributed_primitives/distributedlock"
 )
 
 var (
