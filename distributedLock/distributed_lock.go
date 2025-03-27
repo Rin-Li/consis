@@ -45,7 +45,7 @@ func (r *RedisLock) TryLockWithRetry() error {
 		}
 
 		if ok {
-			fmt.Printf("Lock acquired: %s\n", r.value)
+			fmt.Printf("lock acquired: %s\n", r.value)
 			return nil
 		}
 		time.Sleep(r.retry)
@@ -67,7 +67,7 @@ func (r *RedisLock) Unlock() error {
 		return err
 	}
 	if res == int64(1){
-		fmt.Println("Lock release")
+		fmt.Println("lock release")
 		return nil
 	}
 	return fmt.Errorf("unlock failed: not the lock owner or lock expired")	
