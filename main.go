@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/redis/go-redis/v9"
 	"go_distributed_primitives/simulator"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -10,5 +10,7 @@ func main() {
 		Addr: "localhost:6379",
 	})
     // Run simulation, the number represents the number of buyers
-	simulator.RunSimulationWithoutLock(client, 50)
+	// simulator.RunSimulationWithoutLock(client, 50)
+	simulator.RunSimulationWithSemaphore(client, 50)
+
 }

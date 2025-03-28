@@ -3,16 +3,20 @@ package simulator
 import (
 	"context"
 	"fmt"
+	"go_distributed_primitives/lock"
+	"go_distributed_primitives/semaphore"
 	"sync"
 	"time"
+
 	"github.com/redis/go-redis/v9"
-	"go_distributed_primitives/lock"
 )
 
 var (
 	ctx      = context.Background()
 	stockKey = "product_stock"
 	lockKey  = "lock:product"
+	semKey   = "library_semaphore"
+	resourceLimit = 10
 )
 
 func DecrementStock(client *redis.Client) (bool, error) {
@@ -110,3 +114,58 @@ func RunSimulationWithoutLock(client *redis.Client, buyerCount int) {
 	fmt.Println("📦 Final stock (no lock):", finalStock)
 }
 
+func simulateLibrary(id int){
+	fmt.Printf("🧑‍🎓 Student %d is reading books ...\n", id)
+	time.Sleep(100 * time.Millisecond)
+	fmt.Printf("🧑‍🎓 Student %d finished reading books\n", id)
+}
+
+func RunSimulationWithSemaphore(client *redis.Client, visitorCount int){
+	sema := semaphore.NewRedisSema(client, semKey, resourceLimit, 5*time.Second)
+	var wg sync.WaitGroup
+
+	var mu sync.Mutex
+	currentVisitors := 0
+	maxInside := 0
+
+	for i := 0; i < visitorCount; i++{
+		wg.Add(1)
+		go func (id int){
+			defer wg.Done()
+			ok, err := sema.Acquire(fmt.Sprintf("student-%d", id))
+			if err != nil{
+				fmt.Printf(("[Student %d] ❌ Failed to acquire semaphore: %v\n"), id, err)
+				return
+			}
+
+			if !ok {
+				fmt.Printf("[Student %d] ❌ Library is full of people 🥹\n", id)
+				return
+			}
+
+			mu.Lock()
+			currentVisitors++
+			if currentVisitors > maxInside {
+				maxInside = currentVisitors
+			}
+			mu.Unlock()
+
+			defer sema.Release(fmt.Sprintf("student-%d", id))
+			simulateLibrary(id)
+		}(i)
+	}
+	wg.Wait()
+	fmt.Printf("📈 Max inside at once:   %d (Limit: %d)\n", maxInside, resourceLimit)
+}
+
+func RunSimulationWithoutSemaphore(client *redis.Client, visitorCount int){
+	var wg sync.WaitGroup
+	for i := 0; i < visitorCount; i++{
+		wg.Add(1)
+		go func (id int){
+			defer wg.Done()
+			simulateLibrary(id)
+		}(i)
+	}
+	wg.Wait()
+}
