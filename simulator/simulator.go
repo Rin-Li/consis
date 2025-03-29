@@ -2,8 +2,10 @@ package simulator
 
 import (
 	"context"
+	"math/rand"
 	"fmt"
 	"go_distributed_primitives/lock"
+	"go_distributed_primitives/ratelimit"
 	"go_distributed_primitives/semaphore"
 	"sync"
 	"time"
@@ -14,9 +16,12 @@ import (
 var (
 	ctx      = context.Background()
 	stockKey = "product_stock"
-	lockKey  = "lock:product"
-	semKey   = "library_semaphore"
-	resourceLimit = 10
+	lockKey  = "lock:product" //For lock simulate key
+	semKey   = "library_semaphore" //For semaphore simulate key
+	rlKey    = "requestGo" //For rate limit key
+	resourceLimit = 10 //For semaphore simulate source Limit
+	rate = float64(5) // For rate limit per seconed rate
+	capacity = float64(10) // For rate limit per second capacity
 )
 
 func DecrementStock(client *redis.Client) (bool, error) {
@@ -168,4 +173,84 @@ func RunSimulationWithoutSemaphore(client *redis.Client, visitorCount int){
 		}(i)
 	}
 	wg.Wait()
+}
+
+func simulateRequestForRatelimiter(id int, limiter interface{
+	Allow() (bool, error)
+}) (pass int, limit int){
+	allow, _ := limiter.Allow()
+	if allow{
+		fmt.Printf("[Request %d] ✅ Allowed\n", id)
+		return 1, 0
+	}
+	fmt.Printf("[Request %d] ❌ Not Allowed\n", id)
+	return 0, 1
+}
+
+func RunLeakyBucketSimulation(client *redis.Client,concurrentGo int, requestsPerGo int){
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	//Record for simulate
+	totalAllowed := 0
+	totalLimited := 0
+
+	limiter := ratelimit.NewRedisLeakyBucketLimiter(client, rlKey, rate, capacity)
+
+
+	for i := 0; i < concurrentGo ;i++{
+		wg.Add(1)
+		go func(goroutineID int){
+			defer wg.Done()
+			
+			for j := 0; j < requestsPerGo; j++{
+				requestID := goroutineID*100 + j
+				allowed, limited := simulateRequestForRatelimiter(requestID, limiter) 
+				mu.Lock()
+				totalAllowed += allowed
+				totalLimited += limited
+				
+				mu.Unlock()
+				//Request for sleep, random fequency request
+				time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	fmt.Printf("Token Bucket Summary: Allowed = %d, Limited = %d\n", totalAllowed, totalLimited)
+
+}
+
+func RunTokenBucketSimulation(client *redis.Client,concurrentGo int, requestsPerGo int){
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	//Record for simulate
+	totalAllowed := 0
+	totalLimited := 0
+
+	limiter := ratelimit.NewRedisTokenBucketLimiter(client, rlKey, rate, capacity)
+
+
+	for i := 0; i < concurrentGo ;i++{
+		wg.Add(1)
+		go func(goroutineID int){
+			defer wg.Done()
+			
+			for j := 0; j < requestsPerGo; j++{
+				requestID := goroutineID*100 + j
+				allowed, limited := simulateRequestForRatelimiter(requestID, limiter) 
+				mu.Lock()
+				totalAllowed += allowed
+				totalLimited += limited
+				
+				mu.Unlock()
+				//Request for sleep, random fequency request
+				time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	fmt.Printf("Token Bucket Summary: Allowed = %d, Limited = %d\n", totalAllowed, totalLimited)
+
 }

@@ -12,6 +12,10 @@ func main() {
     // Run simulation, the number represents the number of buyers.
 	// simulator.RunSimulationWithoutLock(client, 50)
 	// Run simulation, the number represents the number of student want to enter the library.
-	simulator.RunSimulationWithSemaphore(client, 50)
+	//simulator.RunSimulationWithSemaphore(client, 50)
+	// Run simulation, for leaky bucketand token bucket, concurrency number, each request
+	//simulator.RunLeakyBucketSimulation(client, 100, 100)
+	simulator.RunTokenBucketSimulation(client, 100, 100)
+
 
 }

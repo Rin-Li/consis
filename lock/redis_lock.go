@@ -9,6 +9,15 @@ import (
 
 
 var ctx = context.Background()
+//Script for redis check if the key is equal, if yes, deleted
+// if not return 0, meaning can not release the lock
+const Script = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then 
+	return redis.call("DEL", KEYS[1])
+else
+	return 0
+end
+`
 
 type RedisLock struct {
 	client *redis.Client
@@ -18,7 +27,7 @@ type RedisLock struct {
 	retry time.Duration
 	maxRetries int
 }
-
+//Init 
 func NewRedisLock(client *redis.Client, key string, value string, expire time.Duration, retry time.Duration, maxRetris int) *RedisLock {
 	return &RedisLock{
 		client: client,
@@ -36,7 +45,9 @@ func (r *RedisLock) TryLock() (bool, error) {
 	return ok, err
 }
 
-// Try to Lock with retry
+// Try to Lock with retry,
+//If the key does not exist, the value is set and the lock is acquired
+//If already exists, somebody else holding the lock
 func (r *RedisLock) TryLockWithRetry() error {
 	for i := 0; i < r.maxRetries; i++{
 		ok, err := r.TryLock()
@@ -54,15 +65,11 @@ func (r *RedisLock) TryLockWithRetry() error {
 }
 
 //Unlock
+//Check the current one is the owner,
+//If yes, deleted the key and releases the lock
+//If not, returns error, meaning someone other has the lock now or the lock has expired.
 func (r *RedisLock) Unlock() error {
-	luaScript := `
-		if redis.call("GET", KEYS[1]) == ARGV[1] then 
-			return redis.call("DEL", KEYS[1])
-		else
-			return 0
-		end
-	`
-	res, err := r.client.Eval(ctx, luaScript, []string {r.key}, r.value).Result()
+	res, err := r.client.Eval(ctx, Script, []string {r.key}, r.value).Result()
 	if err != nil{
 		return err
 	}
